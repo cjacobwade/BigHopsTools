@@ -218,6 +218,9 @@ public class Decal : MonoBehaviour
 			}
 		}
 
+		Mesh mesh = meshFilter.sharedMesh ?? new Mesh();
+		mesh.Clear();
+
 		if (decalVerts.Count > 0 && decalTris.Count > 0)
 		{
 			if (sprite != null && sprite.texture != null)
@@ -274,17 +277,14 @@ public class Decal : MonoBehaviour
 			for (int k = 0; k < decalNormals.Count; k++)
 				decalVerts[k] += decalNormals[k] * worldOffset;
 
-			Mesh mesh = meshFilter.sharedMesh ?? new Mesh();
-			mesh.Clear();
-			
 			mesh.SetVertices(decalVerts);
 			mesh.SetNormals(decalNormals);
 			mesh.SetTriangles(decalTris, 0);
 			mesh.SetUVs(0, decalUVs);
-
-			meshFilter.sharedMesh = mesh;
-			meshRenderer.sharedMaterial = material;
 		}
+
+		meshFilter.sharedMesh = mesh;
+		meshRenderer.sharedMaterial = material;
 	}
 
 	public Vector2 BilinearInterpolation(Vector2 a, Vector2 b, Vector2 c, Vector2 d, float u, float v)

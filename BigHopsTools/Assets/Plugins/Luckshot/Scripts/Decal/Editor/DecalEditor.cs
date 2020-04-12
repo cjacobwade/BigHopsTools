@@ -22,7 +22,7 @@ public class DecalEditor : Editor
 			materials.Add(AssetDatabase.LoadAssetAtPath<Material>(matGuids[i]));
 
 		Decal decal = target as Decal;
-		if (decal != null)
+		if (decal != null && materials.Count > 0)
 		{
 			SerializedObject so = new SerializedObject(decal);
 
@@ -149,7 +149,7 @@ public class DecalEditor : Editor
 		}
 
 		if (index == -1)
-			return objects[0] ?? null;
+			return objects.Count > 0 ? objects[0] : null;
 		else
 			return objects[index];
 	}

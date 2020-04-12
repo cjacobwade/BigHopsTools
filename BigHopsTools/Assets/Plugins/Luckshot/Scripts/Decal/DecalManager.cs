@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using NaughtyAttributes;
 
 public class DecalManager : Singleton<DecalManager>
 {
@@ -35,5 +36,13 @@ public class DecalManager : Singleton<DecalManager>
 
 		if (queuedDecals.Count == 1)
 			enabled = true;
+	}
+
+	[Button("RebuildAll")]
+	public void RebuildAll()
+	{
+		Decal[] decals = FindObjectsOfType<Decal>();
+		for (int i = 0; i < decals.Length; i++)
+			Queue(decals[i]);
 	}
 }
