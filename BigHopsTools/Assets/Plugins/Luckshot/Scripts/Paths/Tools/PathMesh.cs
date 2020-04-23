@@ -269,7 +269,7 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 		if (forwardOverride.HasValue)
 			forward = forwardOverride.Value;
 
-		Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
+		Vector3 right = path.GetNormal(iter);
 		Vector3 up = Vector3.Cross(forward, right).normalized;
 		right = Vector3.Cross(up, forward).normalized;
 
