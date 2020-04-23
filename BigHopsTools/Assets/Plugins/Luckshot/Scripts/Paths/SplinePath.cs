@@ -263,7 +263,7 @@ namespace Luckshot.Paths
 		public override Vector3 GetNormal(float t)
 		{
 			Vector3 forward = GetDirection(t);
-			Vector3 right = Vector3.Cross(Vector3.up, forward);
+			Vector3 right = Vector3.Cross(transform.right, forward);
 			return right.normalized;
 		}
 
