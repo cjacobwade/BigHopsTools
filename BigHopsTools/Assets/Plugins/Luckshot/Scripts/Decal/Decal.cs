@@ -1,15 +1,41 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using NaughtyAttributes;
 
 // Based on https://assetstore.unity.com/packages/tools/particles-effects/simple-decal-system-13889
 // and http://blog.wolfire.com/2009/06/how-to-project-decals/
 
+[ExecuteInEditMode()]
 [RequireComponent(typeof(MeshRenderer), typeof(MeshFilter))]
 public class Decal : MonoBehaviour
 {
-	private MeshFilter meshFilter = null;
 	private MeshRenderer meshRenderer = null;
+	public MeshRenderer MeshRenderer
+	{
+		get
+		{
+			if (meshRenderer == null)
+				meshRenderer = GetComponent<MeshRenderer>();
+
+			return meshRenderer;
+		}
+	}
+
+	private MeshFilter meshFilter = null;
+	public MeshFilter MeshFilter
+	{
+		get
+		{
+			if (meshFilter == null)
+				meshFilter = GetComponent<MeshFilter>();
+
+			return meshFilter;
+		}
+	}
+
+	[SerializeField]
+	private Mesh serializedMesh = null;
 
 	[SerializeField]
 	private Material material = null;
@@ -60,14 +86,16 @@ public class Decal : MonoBehaviour
 	private static List<Vector3> localVerts = new List<Vector3>();
 	private static Dictionary<Vector3, int> vertToIndexMap = new Dictionary<Vector3, int>();
 
+	private void Awake()
+	{
+		if (serializedMesh != null)
+			MeshFilter.sharedMesh = serializedMesh;
+		else
+			BuildDecal();
+	}
+
 	public void BuildDecal()
 	{
-		if (meshRenderer == null)
-			meshRenderer = GetComponent<MeshRenderer>();
-
-		if (meshFilter == null)
-			meshFilter = GetComponent<MeshFilter>();
-
 		vertToIndexMap.Clear();
 		tempCorners.Clear();
 
@@ -218,8 +246,9 @@ public class Decal : MonoBehaviour
 			}
 		}
 
-		Mesh mesh = meshFilter.sharedMesh ?? new Mesh();
-		mesh.Clear();
+		Mesh mesh = new Mesh();
+		mesh.name = "DecalMesh";
+		mesh.hideFlags = HideFlags.HideAndDontSave;
 
 		if (decalVerts.Count > 0 && decalTris.Count > 0)
 		{
@@ -283,8 +312,8 @@ public class Decal : MonoBehaviour
 			mesh.SetUVs(0, decalUVs);
 		}
 
-		meshFilter.sharedMesh = mesh;
-		meshRenderer.sharedMaterial = material;
+		MeshFilter.sharedMesh = serializedMesh = mesh;
+		MeshRenderer.sharedMaterial = material;
 	}
 
 	public Vector2 BilinearInterpolation(Vector2 a, Vector2 b, Vector2 c, Vector2 d, float u, float v)
@@ -302,8 +331,7 @@ public class Decal : MonoBehaviour
 		lowPrecisionVert.z = Mathf.Round(lowPrecisionVert.z);
 		lowPrecisionVert /= 100f;
 
-		int index = 0;
-		if(vertToIndexMap.TryGetValue(lowPrecisionVert, out index))
+		if(vertToIndexMap.TryGetValue(lowPrecisionVert, out int index))
 			return index;
 		
 		decalVerts.Add(point);
