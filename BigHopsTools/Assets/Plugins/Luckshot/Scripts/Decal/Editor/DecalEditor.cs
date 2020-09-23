@@ -1,10 +1,9 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
-using UnityEngine.U2D;
 
-[CustomEditor(typeof(Decal))]
+[CustomEditor(typeof(Decal))] 
 public class DecalEditor : Editor
 {
 	private static int lastInstanceID = 0;
@@ -123,13 +122,11 @@ public class DecalEditor : Editor
 		}
 
 		EditorGUILayout.Separator();
-		if (GUILayout.Button("Build"))
-			decal.BuildDecal();
 
-		if (GUI.changed)
+		if (GUILayout.Button("Build") || GUI.changed)
 		{
-			so.ApplyModifiedProperties();
 			decal.BuildDecal();
+			so.ApplyModifiedProperties();
 			GUI.changed = false;
 		}
 	}
