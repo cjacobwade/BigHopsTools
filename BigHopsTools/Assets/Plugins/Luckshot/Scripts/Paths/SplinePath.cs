@@ -7,7 +7,7 @@ namespace Luckshot.Paths
 	public class SplinePath : PathBase
 	{
 		[SerializeField, HideInInspector]
-		Vector3[] points = null;
+		private Vector3[] points = null;
 		public Vector3[] Points
 		{
 			get
@@ -20,7 +20,20 @@ namespace Luckshot.Paths
 		}
 
 		[SerializeField, HideInInspector]
-		BezierControlPointMode[] modes = null;
+		private Vector3[] normals = null;
+		public Vector3[] Normals
+		{
+			get
+			{
+				if (normals == null || normals.Length == 0)
+					Reset();
+
+				return normals;
+			}
+		}
+
+		[SerializeField, HideInInspector]
+		private BezierControlPointMode[] modes = null;
 		protected BezierControlPointMode[] Modes
 		{
 			get
@@ -43,6 +56,12 @@ namespace Luckshot.Paths
 
 		public Vector3 GetControlPoint(int index)
 		{ return transform.TransformPoint(Points[index]); }
+
+		public Vector3 GetControlNormalLocal(int index)
+		{ return Normals[index]; }
+
+		public Vector3 GetControlNormal(int index)
+		{ return transform.TransformDirection(Normals[index]); }
 
 		public void SetControlPoint(int index, Vector3 point, bool moveGuides = false)
 		{ SetControlPointLocal(index, transform.InverseTransformPoint(point), moveGuides); }
@@ -262,9 +281,70 @@ namespace Luckshot.Paths
 
 		public override Vector3 GetNormal(float t)
 		{
-			Vector3 forward = GetDirection(t);
-			Vector3 right = Vector3.Cross(Vector3.up, forward);
-			return right.normalized;
+			t = Mathf.Clamp01(t);
+
+			if (NormalType == NormalType.LocalUp)
+			{
+				Vector3 forward = GetDirection(t);
+				Vector3 right = Vector3.Cross(transform.up, forward).normalized;
+				Vector3 normal = Vector3.Cross(-right, forward).normalized;
+				return normal;
+			}
+			else
+			{
+
+				int numNodes = Points.Length / 3;
+				if (loop)
+					numNodes += 1;
+
+				float alphaPerNode = 1f / (float)numNodes;
+
+				int node = Mathf.FloorToInt(t / alphaPerNode);
+				node = SafeNodeIndex(node);
+
+				int nodeControlIndex = SafeControlPointIndex(node * 3);
+				Vector3 fromNormal = GetControlNormal(nodeControlIndex);
+
+				int nextNode = SafeNodeIndex(node + 1);
+
+				int nextNodeControlIndex = SafeControlPointIndex(nextNode * 3);
+				Vector3 toNormal = GetControlNormal(nextNodeControlIndex);
+
+				float remainder = t % alphaPerNode;
+				float alpha = remainder / alphaPerNode;
+
+				// This normal is not perpendicular to direction but always changes smoothly
+				Vector3 normal = Vector3.Lerp(fromNormal, toNormal, alpha).normalized;
+
+				// This normal is always perpendicular but can twist
+				Vector3 forward = GetDirection(t);
+				Vector3 right = Vector3.Cross(normal, forward).normalized;
+				normal = Vector3.Cross(-right, forward).normalized;
+
+				return normal;
+			}
+		}
+
+		private int SafeNodeIndex(int index)
+		{
+			int numNodes = Points.Length / 3 + 1;
+
+			if (loop)
+				index = (int)Mathf.Repeat(index, numNodes);
+			else
+				index = Mathf.Clamp(index, 0, numNodes - 1);
+
+			return index;
+		}
+
+		private int SafeControlPointIndex(int index)
+		{
+			if (loop)
+				index = (int)Mathf.Repeat(index, Points.Length);
+			else
+				index = Mathf.Clamp(index, 0, Points.Length - 1);
+
+			return index;
 		}
 
 		public override float GetLength()
@@ -299,6 +379,12 @@ namespace Luckshot.Paths
 			point.x += 1f;
 			Points[Points.Length - 1] = point;
 
+			Vector3 normal = Normals[Normals.Length - 1];
+			Array.Resize(ref normals, Normals.Length + 3);
+			Normals[Normals.Length - 3] = normal;
+			Normals[Normals.Length - 2] = normal;
+			Normals[Normals.Length - 1] = normal;
+
 			Array.Resize(ref modes, Modes.Length + 1);
 			Modes[Modes.Length - 1] = BezierControlPointMode.Mirrored;
 			EnforceMode(Points.Length - 4);
@@ -306,6 +392,7 @@ namespace Luckshot.Paths
 			if (loop)
 			{
 				Points[Points.Length - 1] = Points[0];
+				Normals[Normals.Length - 1] = Normals[0];
 				Modes[Modes.Length - 1] = Modes[0];
 				EnforceMode(0);
 			}
@@ -314,11 +401,13 @@ namespace Luckshot.Paths
 		public virtual void RemoveCurve()
 		{
 			Array.Resize(ref points, Points.Length - 3);
+			Array.Resize(ref normals, Normals.Length - 3);
 			Array.Resize(ref modes, Modes.Length - 1);
 
 			if (loop)
 			{
 				Points[Points.Length - 1] = Points[0];
+				Normals[Normals.Length - 1] = Normals[0];
 				Modes[Modes.Length - 1] = Modes[0];
 				EnforceMode(0);
 			}
@@ -328,10 +417,18 @@ namespace Luckshot.Paths
 		{
 			points = new Vector3[]
 			{
-			new Vector3(1f, 0f, 0f),
-			new Vector3(2f, 0f, 0f),
-			new Vector3(3f, 0f, 0f),
-			new Vector3(4f, 0f, 0f)
+				new Vector3(1f, 0f, 0f),
+				new Vector3(2f, 0f, 0f),
+				new Vector3(3f, 0f, 0f),
+				new Vector3(4f, 0f, 0f)
+			};
+
+			normals = new Vector3[]
+			{
+				Vector3.up,
+				Vector3.up,
+				Vector3.up,
+				Vector3.up
 			};
 
 			modes = new BezierControlPointMode[]
@@ -339,22 +436,6 @@ namespace Luckshot.Paths
 				BezierControlPointMode.Mirrored,
 				BezierControlPointMode.Mirrored
 			};
-		}
-
-		protected virtual void OnDrawGizmosSelected()
-		{
-			Gizmos.color = Color.green.SetA(0.3f);
-			Gizmos.DrawSphere(GetPoint(0f), 0.1f);
-
-			Gizmos.color = Color.red.SetA(0.3f);
-			Gizmos.DrawSphere(GetPoint(1f), 0.1f);
-
-			int numIterations = 10 * ControlPointCount;
-			for (int i = 1; i < numIterations; i++)
-			{
-				Gizmos.color = Color.Lerp(Color.green, Color.red, i / (float)numIterations);
-				Gizmos.DrawLine(GetPoint(i / (float)numIterations), GetPoint((i - 1) / (float)numIterations));
-			}
 		}
 	}
 }

@@ -8,23 +8,26 @@ using NaughtyAttributes;
 using UnityEditor;
 #endif
 
+[ExecuteInEditMode]
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class PathMesh : MonoBehaviour, ICustomMesh
+public abstract class PathMesh : MonoBehaviour, ICustomMesh
 {
 	public event System.Action<ICustomMesh> OnMeshChanged = delegate { };
 
+	[SerializeField, AutoCache]
+	protected PathBase path = null;
+
 	[SerializeField]
-	PathBase path = null;
-	MeshFilter mf = null;
+	protected Mesh mesh = null;
 
-	[SerializeField, Range(3, 50), OnValueChanged("BuildMesh")]
-	private int subdivisions = 10;
+	protected MeshFilter mf = null;
+	protected MeshCollider meshCollider = null;
 
-	[SerializeField, Range(0.1f, 20f), OnValueChanged("BuildMesh")]
-	private float spacing = 0.7f;
+	[SerializeField, Range(0.1f, 3f), OnValueChanged("BuildMesh")]
+	protected float spacing = 0.3f;
 
 	[SerializeField, Range(0f, 1f), OnValueChanged("BuildMesh")]
-	private float fillAmount = 1f;
+	protected float fillAmount = 1f;
 	public float FillAmount
 	{ get { return fillAmount; } }
 
@@ -38,27 +41,29 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 	}
 
 	[SerializeField]
-	private bool markDynamic = false;
+	protected bool markDynamic = false;
 
 	[SerializeField, OnValueChanged("BuildMesh")]
-	private bool variableWidth = false;
+	protected bool variableWidth = false;
 
 	[SerializeField, ShowIf("variableWidth"), OnValueChanged("BuildMesh")]
-	private AnimationCurve widthCurve = new AnimationCurve();
+	protected AnimationCurve widthCurve = new AnimationCurve();
 
 	[SerializeField, OnValueChanged("BuildMesh")]
-	private bool colorVerts = false;
+	protected bool colorVerts = false;
 
 	[SerializeField, ShowIf("colorVerts"), OnValueChanged("BuildMesh")]
-	private Gradient colorGradient = new Gradient();
+	protected Gradient colorGradient = new Gradient();
 
-	private float alphaIter = 0.01f;
+	protected float alphaIter = 0.01f;
 
-	List<Vector3> verts = new List<Vector3>();
-	List<int> indices = new List<int>();
-	List<Vector3> normals = new List<Vector3>();
-	List<Vector2> uvs = new List<Vector2>();
-	List<Color> colors = new List<Color>();
+	protected List<Vector3> verts = new List<Vector3>();
+	protected List<int> indices = new List<int>();
+	protected List<Vector3> normals = new List<Vector3>();
+	protected List<Vector2> uvs = new List<Vector2>();
+	protected List<Color> colors = new List<Color>();
+
+	protected float pathLength = 0f;
 
 	private bool HasLinePath()
 	{ return path && path is LinePath; }
@@ -66,25 +71,23 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 	[SerializeField, ShowIf("HasLinePath"), OnValueChanged("BuildMesh")]
 	private float lineCornerFalloff = 0.05f;
 
-	List<Vector3> pointDirs = new List<Vector3>();
-	List<float> pointIters = new List<float>();
+	protected List<Vector3> pointDirs = new List<Vector3>();
+	protected List<float> pointIters = new List<float>();
 
-	List<float> dists = new List<float>();
-	List<float> iters = new List<float>();
-
-	private Mesh mesh = null;
-
-	float pathLength = 0f;
+	protected List<float> dists = new List<float>();
+	protected List<float> iters = new List<float>();
 
 	private void Awake()
 	{
 		if (path == null)
-		{
-			Debug.LogError("No PathBase found. Trying to find one now.", this);
 			path = GetComponent<PathBase>();
-		}
 
-		path.OnPathChanged -= Path_OnPathChanged;
+		if (path != null)
+		{
+			path.OnPathChanged -= Path_OnPathChanged;
+			if (!Application.IsPlaying(this))
+				BuildMesh();
+		}
 	}
 
 	private void Path_OnPathChanged(PathBase inPath)
@@ -98,12 +101,16 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 	[Button("Build Mesh")]
 	public void BuildMesh()
 	{
+		if (this == null)
+			return;
+
 		if (path == null)
 			path = GetComponent<PathBase>();
 
 		mf = GetComponent<MeshFilter>();
+		meshCollider = GetComponent<MeshCollider>();
 
-		if(mf && path)
+		if (mf && path)
 		{
 			if (mf.sharedMesh != null)
 				DestroyImmediate(mf.sharedMesh);
@@ -125,11 +132,11 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 			Vector3 lastPos = path.GetPoint(0f);
 
 			Vector3 normal = -path.GetDirection(0f);
-			verts.Add(transform.InverseTransformPoint(lastPos + normal * path.Radius/2f));
+			verts.Add(transform.InverseTransformPoint(lastPos + normal * path.Radius / 2f));
 			normals.Add(transform.InverseTransformVector(normal));
 			uvs.Add(new Vector2(0f, 0f));
 
-			if(colorVerts)
+			if (colorVerts)
 				colors.Add(colorGradient.Evaluate(0f));
 
 			pathLength = path.GetLength() * fillAmount;
@@ -139,14 +146,14 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 
 			iters.Add(0f);
 			dists.Add(0f);
-			
+
 			float totalDist = 0f;
 
 			float iter = 0f;
-			while(iter < fillAmount)
+			while (iter < fillAmount)
 			{
 				float moveDist = spacing;
-				while(moveDist > 0f && iter < fillAmount)
+				while (moveDist > 0f && iter < fillAmount)
 				{
 					float prevIter = iter;
 					iter += alphaIter;
@@ -156,7 +163,7 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 					Vector3 toPos = pos - lastPos;
 					float toPosDist = toPos.magnitude;
 
-					if(toPosDist < moveDist)
+					if (toPosDist < moveDist)
 					{
 						moveDist -= toPosDist;
 						totalDist += toPosDist;
@@ -202,7 +209,7 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 					pointDirs.Add(dir);
 					pointIters.Add(alpha);
 
-					for (int j =0; j < iters.Count; j++)
+					for (int j = 0; j < iters.Count; j++)
 					{
 						if (iters[j] > alpha)
 						{
@@ -219,7 +226,7 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 
 					float nearestDist = Mathf.Infinity;
 					Vector3 nearestDir = direction;
-					for(int j = 0; j < pointIters.Count; j++)
+					for (int j = 0; j < pointIters.Count; j++)
 					{
 						float iterDist = Mathf.Abs(pointIters[j] - iters[i]);
 						if (iterDist < nearestDist && iterDist < lineCornerFalloff)
@@ -244,7 +251,7 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 			uvs.Add(new Vector2(1, pathLength));
 			normals.Add(transform.InverseTransformVector(normal));
 
-			if(colorVerts)
+			if (colorVerts)
 				colors.Add(colorGradient.Evaluate(1f));
 
 			mesh.SetVertices(verts);
@@ -252,90 +259,19 @@ public class PathMesh : MonoBehaviour, ICustomMesh
 			mesh.SetNormals(normals);
 			mesh.SetUVs(0, uvs);
 
-			if(colorVerts)
+			if (colorVerts)
 				mesh.SetColors(colors);
 
 			mf.sharedMesh = mesh;
+			
+			if(meshCollider != null)
+				meshCollider.sharedMesh = mesh;
 
 			OnMeshChanged(this);
 		}
 	}
 
-	private void AddEdgeLoop(float iter, int numIter, Vector3? forwardOverride = null)
-	{
-		Vector3 point = path.GetPoint(iter);
-
-		Vector3 forward = path.GetDirection(iter);
-		if (forwardOverride.HasValue)
-			forward = forwardOverride.Value;
-
-		Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
-		Vector3 up = Vector3.Cross(forward, right).normalized;
-		right = Vector3.Cross(up, forward).normalized;
-
-		float yAlpha = dists[numIter] / pathLength;
-		if (float.IsNaN(yAlpha))
-			yAlpha = 0f;
-
-		Color color = Color.black;
-		if (colorVerts)
-			color = colorGradient.Evaluate(yAlpha);
-
-		float widthMod = 1f;
-		if (variableWidth)
-			widthMod = widthCurve.Evaluate(yAlpha);
-
-		int numVerts = verts.Count;
-		int startNum = (subdivisions + 1) * numIter;
-		for (int i = startNum; i <= startNum + subdivisions; i++)
-		{
-			float xAlpha = (i - startNum)/ (float)subdivisions;
-
-			Vector3 offset = right * Mathf.Cos(xAlpha * LuckshotMath.TAU) + up * Mathf.Sin(xAlpha * LuckshotMath.TAU);
-			Vector3 vert = point + offset * path.Radius * widthMod;
-
-			verts.Add(transform.InverseTransformPoint(vert));
-			normals.Add(transform.InverseTransformVector(offset));
-			uvs.Add(new Vector2(xAlpha, dists[numIter]));
-
-			if(colorVerts)
-				colors.Add(color);
-
-			if (numIter == 0)
-			{
-				if (i > startNum)
-				{
-					indices.Add(0);
-					indices.Add(i + 1);
-					indices.Add(i);
-				}
-			}
-			else
-			{
-				if (iter == fillAmount)
-				{
-					if (i > startNum)
-					{
-						indices.Add(i);
-						indices.Add(i + 1);
-						indices.Add(startNum + (subdivisions + 1) + 1);
-					}
-				}
-
-				if (i > startNum)
-				{
-					indices.Add(i + 1);
-					indices.Add(i);
-					indices.Add(i - (subdivisions + 1));
-
-
-					indices.Add(i + 1 - (subdivisions + 1));
-					indices.Add(i + 1);
-					indices.Add(i - (subdivisions + 1));
-				}
-			}
-		}
-	}
+	protected abstract void AddEdgeLoop(float iter, int numIter, Vector3? forwardOverride = null);
 
 	private void OnDrawGizmosSelected()
 	{

@@ -31,6 +31,19 @@ namespace Luckshot.Paths
 			}
 		}
 
+		[SerializeField, HideInInspector]
+		private Vector3[] normals = null;
+		public Vector3[] Normals
+		{
+			get
+			{
+				if (normals == null || normals.Length == 0)
+					Reset();
+
+				return normals;
+			}
+		}
+
 		public int PointCount
 		{ get { return Points.Length; } }
 
@@ -60,13 +73,43 @@ namespace Luckshot.Paths
 
 		public override Vector3 GetNormal(float t)
 		{
-			Vector3 velocity = GetDirection(t);
-			Vector3 normal = Vector3.Cross(Vector3.up, velocity).normalized;
-			if (!clockwise)
-				normal *= -1f;
+			t = Mathf.Clamp01(t);
 
-			return normal;
+			if (NormalType == NormalType.LocalUp)
+			{
+				Vector3 forward = GetDirection(t);
+				Vector3 right = Vector3.Cross(transform.up, forward).normalized;
+				Vector3 normal = Vector3.Cross(-right, forward).normalized;
+				return normal;
+			}
+			else
+			{
+
+				int numPoints = loop ? points.Length : (points.Length - 1);
+
+				float alphaPerNode = 1f / (float)numPoints;
+
+				int node = Mathf.FloorToInt(t / alphaPerNode);
+				node = SafePointIndex(node);
+				Vector3 fromNormal = Normals[node];
+
+				int nextNode = SafePointIndex(node + 1);
+				Vector3 toNormal = Normals[nextNode];
+
+				float remainder = t % alphaPerNode;
+				float alpha = remainder / alphaPerNode;
+
+				Vector3 normal = Vector3.Lerp(fromNormal, toNormal, alpha).normalized;
+
+				return normal;
+			}
 		}
+
+		public Vector3 GetPoint(int index)
+		{ return transform.TransformPoint(Points[index]); }
+
+		public Vector3 GetNormal(int index)
+		{ return transform.TransformDirection(Normals[index]); }
 
 		public override Vector3 GetPoint(float t)
 		{
@@ -76,18 +119,25 @@ namespace Luckshot.Paths
 			float alphaPerPoint = 1f / (float)numPoints;
 
 			int index = Mathf.FloorToInt(t / alphaPerPoint);
-			index = Mathf.Clamp(index, 0, points.Length - 1);
+			index = SafePointIndex(index);
 
 			int nextIndex = index + 1;
-			if (loop)
-				nextIndex = (int)Mathf.Repeat(nextIndex, points.Length);
-			else
-				nextIndex = Mathf.Clamp(nextIndex, 0, points.Length - 1);
+			nextIndex = SafePointIndex(nextIndex);
 
 			float remainder = t % alphaPerPoint;
 
 			Vector3 localPos = Vector3.Lerp(points[index], points[nextIndex], remainder / alphaPerPoint);
 			return transform.TransformPoint(localPos);
+		}
+
+		public int SafePointIndex(int index)
+		{
+			if (loop)
+				index = (int)Mathf.Repeat(index, Points.Length);
+			else
+				index = Mathf.Clamp(index, 0, Points.Length - 1);
+
+			return index;
 		}
 
 		public override float GetNearestAlpha(Vector3 point, int iterations = 10)
@@ -182,10 +232,12 @@ namespace Luckshot.Paths
 			point.x += 1f;
 			Points[Points.Length - 1] = point;
 
+			Vector3 normal = Normals[Normals.Length - 1];
+			Array.Resize(ref normals, Normals.Length + 1);
+			Normals[Normals.Length - 1] = normal;
+
 			if (loop)
-			{
 				Points[Points.Length - 1] = Points[0];
-			}
 
 			OnPathChanged(this);
 		}
@@ -193,11 +245,10 @@ namespace Luckshot.Paths
 		public void RemovePoint()
 		{
 			Array.Resize(ref points, Points.Length - 1);
+			Array.Resize(ref normals, Normals.Length - 1);
 
 			if (loop)
-			{
 				Points[Points.Length - 1] = Points[0];
-			}
 
 			OnPathChanged(this);
 		}
@@ -208,6 +259,12 @@ namespace Luckshot.Paths
 			{
 				new Vector3(1f, 0f, 0f),
 				new Vector3(2f, 0f, 0f)
+			};
+
+			normals = new Vector3[]
+			{
+				Vector3.up,
+				Vector3.up
 			};
 
 			OnPathChanged(this);

@@ -7,10 +7,8 @@ public class OrientSpline : AdvSpline<OrientSplineData>
 {
 	OrientSplineData interpData = new OrientSplineData();
 
-	protected override void OnDrawGizmosSelected()
+	protected virtual void OnDrawGizmosSelected()
 	{
-		base.OnDrawGizmosSelected();
-
 		for(float iter = 0f; iter <= 1f; iter += 0.05f)
 		{
 			Vector3 point = GetPoint(iter);

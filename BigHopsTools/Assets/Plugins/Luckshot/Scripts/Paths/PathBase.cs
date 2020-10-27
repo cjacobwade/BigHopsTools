@@ -5,6 +5,12 @@ using NaughtyAttributes;
 
 namespace Luckshot.Paths
 {
+	public enum NormalType
+	{
+		LocalUp,
+		Perpendicular
+	}
+
 	public abstract class PathBase : MonoBehaviour
 	{
 		public abstract Vector3 GetPoint(float alpha);
@@ -31,6 +37,11 @@ namespace Luckshot.Paths
 
 		public void SetRadius(float inRadius)
 		{ radius = inRadius; }
+
+		[SerializeField]
+		private NormalType normalType = NormalType.LocalUp;
+		public NormalType NormalType
+		{ get { return normalType; } }
 
 		private void ChangePath()
 		{ OnPathChanged(this); }

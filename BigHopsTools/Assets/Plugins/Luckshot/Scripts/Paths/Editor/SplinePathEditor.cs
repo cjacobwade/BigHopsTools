@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Luckshot.Paths
 {
 	[CustomEditor(typeof(SplinePath), true)]
-	public class SplinePathInspector : Editor
+	public class SplinePathEditor : Editor
 	{
 		protected const int stepsPerCurve = 10;
 		protected const float directionScale = 0.5f;
@@ -28,6 +28,9 @@ namespace Luckshot.Paths
 
 			spline = target as SplinePath;
 
+			if (spline == null)
+				return;
+
 			if(!Application.IsPlaying(spline))
 				spline.OnPathChanged(spline);
 		}
@@ -42,6 +45,8 @@ namespace Luckshot.Paths
 		{
 			spline = target as SplinePath;
 
+			ResetHandleSettings();
+
 			if (spline != null)
 				spline.OnPathChanged(spline);
 			else
@@ -53,6 +58,8 @@ namespace Luckshot.Paths
 			base.OnInspectorGUI();
 
 			spline = target as SplinePath;
+			if (spline == null)
+				return;
 
 			if (selectedIndex >= 0 && selectedIndex < spline.ControlPointCount)
 			{
@@ -133,10 +140,11 @@ namespace Luckshot.Paths
 
 			if (currentTool != Tools.current ||
 				currentPivotRotation != Tools.pivotRotation)
-			{
-				ResetHandleSettings();
+			{ 
 				currentTool = Tools.current;
 				currentPivotRotation = Tools.pivotRotation;
+
+				ResetHandleSettings();
 			}
 
 			Vector3 p0 = ShowPoint(0);
@@ -154,19 +162,37 @@ namespace Luckshot.Paths
 				p0 = p3;
 			}
 
-			ShowDirections();
-		}
+			Handles.color = Color.green.SetA(0.3f);
+			Handles.SphereHandleCap(0, spline.GetPoint(0f), Quaternion.identity, 0.1f, EventType.Repaint);
 
-		void ShowDirections()
-		{
-			Handles.color = Color.green;
-			Vector3 point = spline.GetPoint(0f);
-			Handles.DrawLine(point, point + spline.GetDirection(0f) * directionScale);
-			int steps = stepsPerCurve * spline.CurveCount;
-			for (int i = 1; i <= steps; i++)
+			Handles.color = Color.red.SetA(0.3f);
+			Handles.SphereHandleCap(0, spline.GetPoint(1f), Quaternion.identity, 0.1f, EventType.Repaint);
+
+			if (spline.NormalType == NormalType.Perpendicular)
 			{
-				point = spline.GetPoint(i / (float)steps);
-				Handles.DrawLine(point, point + spline.GetDirection(i / (float)steps) * directionScale);
+				for (int i = 0; i < spline.Normals.Length; i++)
+				{
+					if (i % 3 == 0)
+					{
+						Vector3 pos = spline.GetControlPoint(i);
+						Vector3 normal = spline.GetControlNormal(i);
+
+						Handles.color = Color.red;
+						Handles.DrawLine(pos, pos + normal * 0.8f);
+					}
+				}
+			}
+
+			int numIterations = 10 * spline.ControlPointCount;
+			for (int i = 1; i < numIterations; i++)
+			{
+				float alpha = i / (float)numIterations;
+
+				Vector3 pos = spline.GetPoint(alpha);
+				Vector3 normal = spline.GetNormal(alpha);
+
+				Handles.color = Color.green;
+				Handles.DrawLine(pos, pos + normal * 0.4f);
 			}
 		}
 
@@ -180,21 +206,47 @@ namespace Luckshot.Paths
 			Vector3 point = spline.GetControlPoint(selectedIndex);
 			if (selectedIndex % 3 == 0)
 			{
+				Vector3 normal = spline.GetControlNormal(selectedIndex);
+
+				Vector3 guidePos = Vector3.zero;
 				if (selectedIndex == 0)
-				{
-					Vector3 p2 = spline.GetControlPoint(selectedIndex + 1);
-					handleRotation = Quaternion.LookRotation(point - p2, Vector3.up);
-				}
+					guidePos = spline.GetControlPoint(selectedIndex + 1);
 				else
+					guidePos = spline.GetControlPoint(selectedIndex - 1);
+
+				Vector3 toGuide = (guidePos - point).normalized;
+
+				Vector3 right = Vector3.Cross(normal, toGuide).normalized;
+				normal = Vector3.Cross(-right, toGuide).normalized;
+
+				spline.Normals[selectedIndex] = spline.transform.InverseTransformDirection(normal);
+
+				handleRotation = Quaternion.LookRotation(toGuide, normal);
+
+				if (spline.GetControlPointMode(selectedIndex) == BezierControlPointMode.Free)
 				{
-					Vector3 p1 = spline.GetControlPoint(selectedIndex - 1);
-					handleRotation = Quaternion.LookRotation(p1 - point, Vector3.up);
+					handleRotation = Quaternion.LookRotation(normal);
+					Quaternion offsetRot = Quaternion.AngleAxis(90f, handleRotation * Vector3.right);
+					handleRotation = offsetRot * handleRotation;
 				}
 			}
 			else
-				handleRotation = Quaternion.identity;
+			{
+				int nodeIndex = 0;
 
-			handleRotation = Tools.pivotRotation == PivotRotation.Local ? handleRotation : Quaternion.identity;
+				if((selectedIndex - 1) % 3 == 0) // after node
+					nodeIndex = selectedIndex - 1;
+				else
+					nodeIndex = selectedIndex + 1;
+
+				Vector3 normal = spline.GetControlNormal(nodeIndex);
+
+				Vector3 cp = spline.GetControlPoint(nodeIndex);
+				handleRotation = Quaternion.LookRotation(point - cp, normal);
+			}
+
+			if (Tools.pivotRotation == PivotRotation.Global)
+				handleRotation = Quaternion.identity;
 		}
 
 		protected virtual Vector3 ShowPoint(int index)
@@ -202,9 +254,7 @@ namespace Luckshot.Paths
 			Vector3 point = spline.GetControlPoint(index);
 			float size = HandleUtility.GetHandleSize(point);
 			if (index == 0)
-			{
 				size *= 2f;
-			}
 
 			Handles.color = modeColors[(int)spline.GetControlPointMode(index)];
 			if (Handles.Button(point, spline.transform.rotation, size * handleSize, size * pickSize, Handles.DotHandleCap))
@@ -220,6 +270,9 @@ namespace Luckshot.Paths
 			{
 				if(index % 3 == 0)
 				{
+					if (spline.NormalType == NormalType.LocalUp && Tools.current == Tool.Rotate)
+						Tools.current = Tool.Move;
+
 					if (Tools.current == Tool.Rotate)
 					{
 						EditorGUI.BeginChangeCheck();
@@ -233,18 +286,25 @@ namespace Luckshot.Paths
 							Undo.RecordObject(spline, "Rotate Point");
 							EditorUtility.SetDirty(spline);
 
+							Vector3 normal = spline.GetControlNormal(selectedIndex);
+							normal = relativeRotation * normal;
+							spline.Normals[selectedIndex] = spline.transform.InverseTransformDirection(normal);
+
 							if (index > 0)
 							{
 								Vector3 p1 = spline.GetControlPoint(index - 1);
 								Vector3 toPos = relativeRotation * (p1 - point);
-								spline.SetControlPoint(index - 1, point + toPos, true);
+								spline.SetControlPoint(index - 1, point + toPos, false);
 							}
 
-							if (index + 1 < spline.ControlPointCount)
+							// Need to check free because if aligned or mirrors, setting control point above
+							// applies needed update to other guide point, which makes the below cause a double offset
+							if (spline.GetControlPointMode(index) == BezierControlPointMode.Free &&
+								index + 1 < spline.ControlPointCount)
 							{
 								Vector3 p2 = spline.GetControlPoint(index + 1);
 								Vector3 toPos2 = relativeRotation * (p2 - point);
-								spline.SetControlPoint(index + 1, point + toPos2, true);
+								spline.SetControlPoint(index + 1, point + toPos2, false);
 							}
 						}
 

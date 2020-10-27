@@ -2,28 +2,26 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Luckshot.Paths;
+using NaughtyAttributes;
 
 public class CirclePath : PathBase
 {
 	[SerializeField]
 	private float circleRadius = 1f;
+	public float CircleRadius
+	{ get { return circleRadius; } }
 
 	[SerializeField, Range(0f, 1f)]
 	private float fillAmount = 1f;
+	public float FillAmount
+	{ get { return fillAmount; } }
 
-	private bool prevLoop = false;
-
-	public override bool Loop
-	{ get { return base.Loop && fillAmount == 1f; } }
-
-	private void OnValidate()
+	public void SetFillAmount(float fillAmount)
 	{
-		if(prevLoop != loop)
+		if (fillAmount != this.fillAmount)
 		{
-			if (loop)
-				fillAmount = 1f;
-
-			prevLoop = loop;
+			this.fillAmount = fillAmount;
+			OnPathChanged(this);
 		}
 	}
 
@@ -68,22 +66,22 @@ public class CirclePath : PathBase
 	}
 
 	public override Vector3 GetNormal(float t)
-	{ return (GetPoint(t) - transform.position).normalized;}
+	{
+		if (NormalType == NormalType.LocalUp)
+		{
+			Vector3 forward = GetDirection(t);
+			Vector3 right = Vector3.Cross(transform.up, forward).normalized;
+			Vector3 normal = Vector3.Cross(-right, forward).normalized;
+			return normal;
+		}
+		else
+		{
+			Vector3 point = GetPoint(t);
+			Vector3 normal = (point - transform.position).normalized;
+			return normal;
+		}
+	}
 
 	public override float GetLength()
 	{ return circleRadius * Mathf.PI * 2f; }
-
-	private void OnDrawGizmosSelected()
-	{
-		Vector3 prevPathPos = GetPoint(0f);
-
-		int iterations = 100;
-		for(int i = 1; i <= iterations; i++)
-		{
-			Vector3 pathPos = GetPoint(i / (float)iterations);
-			Gizmos.DrawLine(pathPos, prevPathPos);
-
-			prevPathPos = pathPos;
-		}
-	}
 }

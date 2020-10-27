@@ -49,9 +49,21 @@ public class PathAligner : MonoBehaviour
 
 				Quaternion lookRot = Quaternion.identity;
 				if (pao.alignDirection == AlignDirection.ZForward)
-					lookRot = Quaternion.AngleAxis(pao.rotAngle, direction) * Quaternion.LookRotation(direction, normal);
+				{
+					Quaternion directionLook = Quaternion.identity;
+					if (direction != Vector3.zero)
+						directionLook = Quaternion.LookRotation(direction, normal);
+
+					lookRot = Quaternion.AngleAxis(pao.rotAngle, direction) * directionLook;
+				}
 				else
-					lookRot = Quaternion.AngleAxis(pao.rotAngle, direction) * Quaternion.LookRotation(normal, direction);
+				{
+					Quaternion normalLook = Quaternion.identity;
+					if (normal != Vector3.zero)
+						normalLook = Quaternion.LookRotation(normal, direction);
+
+					lookRot = Quaternion.AngleAxis(pao.rotAngle, direction) * normalLook;
+				}
 
 				pao.transform.rotation = lookRot;
 			}

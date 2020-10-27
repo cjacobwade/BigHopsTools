@@ -23,7 +23,12 @@ namespace Luckshot.Paths
 			else
 				alpha = Mathf.Clamp01(alpha);
 
-			Gizmos.DrawSphere(path.GetPoint(alpha), 0.1f);
+			Vector3 pos = path.GetPoint(alpha);
+			Vector3 normal = path.GetNormal(alpha);
+
+			Gizmos.DrawSphere(pos, 0.1f);
+
+			Debug.DrawLine(pos, pos + normal, Color.red);
 		}
 	}
 }

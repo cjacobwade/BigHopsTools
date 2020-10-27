@@ -11,10 +11,8 @@ namespace Luckshot.Paths
 
 		ExampleSplineNodeData _interpData = new ExampleSplineNodeData();
 
-		protected override void OnDrawGizmosSelected()
+		protected virtual void OnDrawGizmosSelected()
 		{
-			base.OnDrawGizmosSelected();
-
 			float repeatAlpha = Mathf.Repeat(_testAlpha, 1f);
 
 			InterpNodeData(_interpData, repeatAlpha);
