@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System;
@@ -137,6 +137,11 @@ public class LensManager<T> : LensManagerBase
 	{
 		if (!activeRequests.Contains(handle))
 		{
+			if(handle as Lens<T> == null)
+			{
+				Debug.LogErrorFormat("Trying to add {0} request to {1} lens manager.", handle.GetType(), typeof(T).ToString());
+			}
+
 			bool added = false;
 			for (int i = 0; i < activeRequests.Count; i++)
 			{
@@ -173,7 +178,7 @@ public class LensManager<T> : LensManagerBase
 		return false;
 	}
 
-	public bool RemoveRequestsWithContext(object inContext)
+	public bool RemoveRequestsWithContext(object inContext, bool evaluate = true)
 	{
 		bool anyRemoved = false;
 		for (int i = 0; i < activeRequests.Count; i++)
@@ -185,7 +190,7 @@ public class LensManager<T> : LensManagerBase
 			}
 		}
 
-		if (anyRemoved)
+		if (anyRemoved && evaluate)
 			EvaluateRequests();
 
 		return anyRemoved;
