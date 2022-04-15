@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
@@ -12,38 +12,54 @@ public class LensManagerBaseDrawer : PropertyDrawer
 	{
 		EditorGUI.BeginProperty(position, label, property);
 
-		SerializedProperty requestsProp = property.FindPropertyRelative("activeRequests");
-		SerializedProperty valuesProp = property.FindPropertyRelative("evaluateValues");
-		SerializedProperty resultProp = property.FindPropertyRelative("cachedResult");
+		position.height = EditorGUIUtility.singleLineHeight;
+
+		var requestsProp = property.FindPropertyRelative("activeRequests");
+		var valuesProp = property.FindPropertyRelative("evaluateValues");
+		var resultProp = property.FindPropertyRelative("cachedResult");
 
 		string formatString = string.Format("{0} ({1}) - Num Requests: {2}", label.text, GetPropertyLabel(resultProp), requestsProp.arraySize);
 
 		bool playingAndAnyRequests = Application.IsPlaying(property.serializedObject.targetObject) && requestsProp.arraySize > 0;
-		GUIStyle style = playingAndAnyRequests ? EditorStyles.boldLabel : EditorStyles.label;
+
+		GUIStyle style = new GUIStyle(playingAndAnyRequests ? EditorStyles.boldLabel : EditorStyles.label);
 		style.richText = true;
 
-		property.isExpanded = EditorGUILayout.Foldout(property.isExpanded, formatString, true);
+		EditorGUI.PropertyField(position, property, new GUIContent(formatString), false);
+
 		if (property.isExpanded)
 		{
+			position.y += EditorGUIUtility.singleLineHeight;
+
 			EditorGUI.indentLevel++;
 
 			for (int i = 0; i < requestsProp.arraySize; i++)
 			{
 				var requestProp = requestsProp.GetArrayElementAtIndex(i);
+				if (requestProp != null)
+				{
+					string name = requestProp.FindPropertyRelative("Name").stringValue;
+					int instanceID = requestProp.FindPropertyRelative("instanceID").intValue;
 
-				string name = requestProp.FindPropertyRelative("Name").stringValue;
-				int instanceID = requestProp.FindPropertyRelative("instanceID").intValue;
+					SerializedProperty valueProp = valuesProp.GetArrayElementAtIndex(i);
+					string valueText = GetPropertyLabel(valueProp);
+					string formatText = !string.IsNullOrEmpty(name) ? "{0}: {1}" : "{1}";
+					string labelText = string.Format(formatText, name, valueText);
 
-				SerializedProperty valueProp = valuesProp.GetArrayElementAtIndex(i);
-				string valueText = GetPropertyLabel(valueProp);
-				string formatText = !string.IsNullOrEmpty(name) ? "{0}: {1}" : "{1}";
+					GUI.enabled = false;
 
-				EditorGUILayout.LabelField(string.Format(formatText, name, valueText));
-				int controlID = GUIUtility.GetControlID(FocusType.Passive) - 1;
+					EditorGUI.PropertyField(position, valueProp, new GUIContent(labelText), true);
+					position.y += EditorGUI.GetPropertyHeight(valueProp, true);
 
-				EventType eventType = Event.current.GetTypeForControl(controlID);
-				if (eventType == EventType.MouseDown && instanceID != -1)
-					EditorGUIUtility.PingObject(instanceID);
+					GUI.enabled = true;
+
+					//EditorGUI.LabelField(position, string.Format(formatText, name, valueText));
+					int controlID = GUIUtility.GetControlID(FocusType.Passive) - 1;
+
+					EventType eventType = Event.current.GetTypeForControl(controlID);
+					if (eventType == EventType.MouseDown && instanceID != -1)
+						EditorGUIUtility.PingObject(instanceID);
+				}
 			}
 
 			EditorGUI.indentLevel--;
@@ -54,31 +70,59 @@ public class LensManagerBaseDrawer : PropertyDrawer
 
 	private string GetPropertyLabel(SerializedProperty prop)
 	{
-		switch (prop.type)
+		switch (prop.propertyType)
 		{
-			case "float":
+			case SerializedPropertyType.Float:
 				return prop.floatValue.ToString();
-			case "Vector2":
+			case SerializedPropertyType.Vector2:
 				return prop.vector2Value.ToString();
-			case "Vector3":
+			case SerializedPropertyType.Vector3:
 				return prop.vector3Value.ToString();
-			case "Vector4":
+			case SerializedPropertyType.Vector4:
 				return prop.vector4Value.ToString();
-			case "int":
+			case SerializedPropertyType.Integer:
 				return prop.intValue.ToString();
-			case "Color":
+			case SerializedPropertyType.Color:
 				return prop.colorValue.ToString();
-			case "Quaternion":
+			case SerializedPropertyType.Quaternion:
 				return prop.quaternionValue.ToString();
-			case "string":
+			case SerializedPropertyType.String:
 				return prop.stringValue;
-			case "bool":
+			case SerializedPropertyType.Boolean:
 				return prop.boolValue.ToString();
+			case SerializedPropertyType.ObjectReference:
+				return prop.objectReferenceValue?.name;
+			case SerializedPropertyType.Enum:
+				return prop.enumDisplayNames[prop.enumValueIndex];
+			case SerializedPropertyType.Bounds:
+				return prop.boundsValue.ToString();
+			case SerializedPropertyType.BoundsInt:
+				return prop.boundsIntValue.ToString();
 			default:
 				return string.Empty;
 		}
 	}
 
 	public override float GetPropertyHeight(SerializedProperty property, GUIContent label)
-	{ return 0f; }
+	{
+		float height = EditorGUIUtility.singleLineHeight;
+
+		if(property.isExpanded)
+        {
+			var requestsProp = property.FindPropertyRelative("activeRequests");
+			var valuesProp = property.FindPropertyRelative("evaluateValues");
+
+			for (int i = 0; i < requestsProp.arraySize; i++)
+			{
+				var requestProp = requestsProp.GetArrayElementAtIndex(i);
+				if (requestProp != null)
+				{
+					SerializedProperty valueProp = valuesProp.GetArrayElementAtIndex(i);
+					height += EditorGUI.GetPropertyHeight(valueProp, true);
+				}
+			}
+		}
+
+		return height;
+	}
 }
